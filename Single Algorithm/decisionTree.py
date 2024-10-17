@@ -5,7 +5,7 @@ from sklearn.metrics import roc_auc_score, roc_curve, confusion_matrix, classifi
 import matplotlib.pyplot as plt
 
 # Load the dataset
-data = pd.read_csv('Cardiovascular_Disease_Dataset\Cardiovascular_Disease_Dataset.csv')
+data = pd.read_csv('UCI Cardiovascular.csv')
 
 # Drop the 'patientid' column as it is not a useful feature for prediction
 data = data.drop(columns=['patientid'])
