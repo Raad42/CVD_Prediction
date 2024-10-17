@@ -7,14 +7,7 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import StackingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    roc_auc_score,
-    roc_curve,
-    confusion_matrix,
-    classification_report,
-    accuracy_score,
-    f1_score,
-)
+from sklearn.metrics import roc_auc_score, roc_curve, confusion_matrix, classification_report, accuracy_score, f1_score
 from sklearn.metrics import pairwise_distances
 import matplotlib.pyplot as plt
 
@@ -25,12 +18,12 @@ india_df = pd.read_csv('Cardiovascular_Disease_Dataset.csv')  # Adjust the file 
 # Clean the UCI dataset
 uci_df.replace(['?', '-9'], np.nan, inplace=True)
 uci_df = uci_df.apply(pd.to_numeric, errors='coerce')
-uci_df.fillna(uci_df.mean(), inplace=True)
+uci_df = uci_df.fillna(uci_df.mean())
 
 # Clean the India dataset
 india_df.replace(['?', '-9'], np.nan, inplace=True)
 india_df = india_df.apply(pd.to_numeric, errors='coerce')
-india_df.fillna(india_df.mean(), inplace=True)
+india_df = india_df.fillna(india_df.mean())
 
 # Rename features in the India dataset to match UCI dataset
 feature_mapping = {
@@ -50,8 +43,7 @@ feature_mapping = {
 }
 
 # Drop the patientid column as it's not used in the analysis
-if 'patientid' in india_df.columns:
-    india_df.drop(columns=['patientid'], inplace=True)
+india_df.drop(columns=['patientid'], inplace=True)
 
 # Rename the columns in the Indian dataset
 india_df.rename(columns=feature_mapping, inplace=True)
@@ -149,12 +141,9 @@ print(f"F1 Score: {f1:.2f}")
 ### Calculate Model Diversity ###
 
 # Predict with each base model individually
-knn.fit(X_train, y_train)
-knn_pred = knn.predict(X_test)
-svm.fit(X_train, y_train)
-svm_pred = svm.predict(X_test)
-dt.fit(X_train, y_train)
-dt_pred = dt.predict(X_test)
+knn_pred = knn.fit(X_train, y_train).predict(X_test)
+svm_pred = svm.fit(X_train, y_train).predict(X_test)
+dt_pred = dt.fit(X_train, y_train).predict(X_test)
 
 # Combine predictions into a matrix
 pred_matrix = np.vstack((knn_pred, svm_pred, dt_pred)).T
