@@ -23,7 +23,7 @@ data = data.fillna(data.mean())
 data['num'] = data['num'].apply(lambda x: 1 if x > 0 else 0)
 
 # Sample a smaller portion of the dataset (e.g., 10%)
-data_sampled = data.sample(frac=1, random_state=42)
+data_sampled = data
 
 # Split dataset into features and target
 X = data_sampled.drop(columns=['num'])
