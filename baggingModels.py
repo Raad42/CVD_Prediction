@@ -7,6 +7,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier  # For Artificial Neural Network (ANN)
+from sklearn.ensemble import BaggingClassifier  # For bagging
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -73,15 +74,11 @@ def evaluate_model(model, X_train, y_train, X_test, y_test):
 
 # Initialize models
 models = {
-    'Logistic Regression': LogisticRegression(random_state=42),
-    'Decision Tree': DecisionTreeClassifier(random_state=42),
-    'SVM': SVC(probability=True, random_state=42),
-    'K-Nearest Neighbors': KNeighborsClassifier(),
-    'Artificial Neural Network (ANN)': MLPClassifier(hidden_layer_sizes=(100, 50),  # Two hidden layers with 100 and 50 neurons
-                                                     activation='relu',  # Using ReLU activation function
-                                                     solver='adam',      # Adam optimizer
-                                                     random_state=42,
-                                                     max_iter=1000)      # Maximum iterations
+    'Logistic Regression': BaggingClassifier(base_estimator=LogisticRegression(random_state=42), n_estimators=10, random_state=42),
+    'Decision Tree': BaggingClassifier(base_estimator=DecisionTreeClassifier(random_state=42), n_estimators=10, random_state=42),
+    'SVM': BaggingClassifier(base_estimator=SVC(probability=True, random_state=42), n_estimators=10, random_state=42),
+    'K-Nearest Neighbors': BaggingClassifier(base_estimator=KNeighborsClassifier(), n_estimators=10, random_state=42),
+    'Bagged ANN': BaggingClassifier(base_estimator=MLPClassifier(hidden_layer_sizes=(100, 50), activation='relu', solver='adam', random_state=42, max_iter=1000), n_estimators=10, random_state=42)
 }
 
 # Dictionary to store results

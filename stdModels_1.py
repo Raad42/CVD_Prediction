@@ -1,5 +1,6 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.linear_model import LogisticRegression
@@ -19,10 +20,12 @@ data.replace('?', pd.NA, inplace=True)
 
 # Convert the 'ca' and 'thal' columns to numeric
 data['ca'] = pd.to_numeric(data['ca'], errors='coerce')
-data['thal'] = pd.to_numeric(data['thal'], errors='coerce')
+
+# Drop the 'thal' column
+data_cleaned = data.drop(columns=['thal'])
 
 # Drop rows with missing values
-data_cleaned = data.dropna()
+data_cleaned = data_cleaned.dropna()
 
 # Convert target variable 'num' into a binary classification (0 = no heart disease, 1 = heart disease)
 data_cleaned['heart_disease'] = data_cleaned['num'].apply(lambda x: 1 if x > 0 else 0)
@@ -34,8 +37,8 @@ data_cleaned = data_cleaned.drop(columns=['num'])
 X_cleaned = data_cleaned.drop(columns=['heart_disease'])
 y_cleaned = data_cleaned['heart_disease']
 
-# Split the cleaned data into training and testing sets (80% train, 20% test)
-X_train_cleaned, X_test_cleaned, y_train_cleaned, y_test_cleaned = train_test_split(X_cleaned, y_cleaned, test_size=0.2, random_state=42)
+# Split the cleaned data into training and testing sets (90% train, 10% test)
+X_train_cleaned, X_test_cleaned, y_train_cleaned, y_test_cleaned = train_test_split(X_cleaned, y_cleaned, test_size=0.1, random_state=42)
 
 # Normalize the feature data
 scaler = StandardScaler()
@@ -71,26 +74,54 @@ def evaluate_model(model, X_train, y_train, X_test, y_test):
     
     return accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr
 
-# Initialize models
-models = {
-    'Logistic Regression': LogisticRegression(random_state=42),
-    'Decision Tree': DecisionTreeClassifier(random_state=42),
-    'SVM': SVC(probability=True, random_state=42),
-    'K-Nearest Neighbors': KNeighborsClassifier(),
-    'Artificial Neural Network (ANN)': MLPClassifier(hidden_layer_sizes=(100, 50),  # Two hidden layers with 100 and 50 neurons
-                                                     activation='relu',  # Using ReLU activation function
-                                                     solver='adam',      # Adam optimizer
-                                                     random_state=42,
-                                                     max_iter=1000)      # Maximum iterations
+model_params = {
+    'Logistic Regression': {
+        'model': LogisticRegression(random_state=42),
+        'params': {
+            'C': [0.01, 0.1, 1, 10, 100]
+        }
+    },
+    'Decision Tree': {
+        'model': DecisionTreeClassifier(random_state=42),
+        'params': {
+            'max_depth': [3, 5, 10, None],
+            'min_samples_split': [2, 5, 10]
+        }
+    },
+    'SVM': {
+        'model': SVC(probability=True, random_state=42),
+        'params': {
+            'C': [0.1, 1, 10],
+            'kernel': ['linear', 'rbf']
+        }
+    },
+    'K-Nearest Neighbors': {
+        'model': KNeighborsClassifier(),
+        'params': {
+            'n_neighbors': [3, 5, 7, 9],
+            'weights': ['uniform', 'distance']
+        }
+    },
+    'Artificial Neural Network (ANN)': {
+        'model': MLPClassifier(random_state=42, max_iter=1000),
+        'params': {
+            'hidden_layer_sizes': [(50,), (100,), (100, 50)],
+            'activation': ['relu', 'tanh'],
+            'solver': ['adam', 'sgd']
+        }
+    }
 }
 
 # Dictionary to store results
 results = {}
 
-# Evaluate all models
-for model_name, model in models.items():
-    accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr = evaluate_model(model, X_train_cleaned, y_train_cleaned, X_test_cleaned, y_test_cleaned)
+# Perform Randomized Search and Evaluate Models
+for model_name, mp in model_params.items():
+    clf = RandomizedSearchCV(mp['model'], mp['params'], n_iter=10, cv=5, scoring='roc_auc', random_state=42)
+    accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr = evaluate_model(clf, X_train_cleaned, y_train_cleaned, X_test_cleaned, y_test_cleaned)
+    
     results[model_name] = {
+        'best_params': clf.best_params_,
         'accuracy': accuracy,
         'precision': precision,
         'recall': recall,
@@ -100,7 +131,8 @@ for model_name, model in models.items():
         'fpr': fpr,
         'tpr': tpr
     }
-    print(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC Score: {auc_score:.4f}")
+    print(f"{model_name} - Best Params: {clf.best_params_}, Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC Score: {auc_score:.4f}")
+
 
 # Plot confusion matrices
 for model_name, result in results.items():
@@ -128,6 +160,7 @@ model_results = []
 for model_name, result in results.items():
     model_results.append({
         'Model': model_name,
+        'Best Params': result['best_params'],
         'Accuracy': f"{result['accuracy']:.4f}",
         'Precision': f"{result['precision']:.4f}",
         'Recall': f"{result['recall']:.4f}",
