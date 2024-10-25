@@ -1,5 +1,5 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.linear_model import LogisticRegression
@@ -18,18 +18,17 @@ data = pd.read_csv(file_path)
 # Replace non-numeric values with NaN and then drop or fill them
 data.replace('?', pd.NA, inplace=True)
 
-# Convert the 'ca' and 'thal' columns to numeric
+# Convert the 'ca' column to numeric
 data['ca'] = pd.to_numeric(data['ca'], errors='coerce')
-data['thal'] = pd.to_numeric(data['thal'], errors='coerce')
 
 # Drop rows with missing values
 data_cleaned = data.dropna()
 
 # Convert target variable 'num' into a binary classification (0 = no heart disease, 1 = heart disease)
-data_cleaned.loc[:, 'heart_disease'] = data_cleaned['num'].apply(lambda x: 1 if x > 0 else 0)
+data_cleaned['heart_disease'] = data_cleaned['num'].apply(lambda x: 1 if x > 0 else 0)
 
-# Drop the original 'num' column
-data_cleaned = data_cleaned.drop(columns=['num'])
+# Drop the original 'num' column and the 'thal' column
+data_cleaned = data_cleaned.drop(columns=['num', 'thal'])
 
 # Define the features (X) and the target (y)
 X_cleaned = data_cleaned.drop(columns=['heart_disease'])
@@ -52,10 +51,7 @@ def evaluate_model(model, X_train, y_train, X_test, y_test):
     y_pred = model.predict(X_test)
     
     # Calculate predicted probabilities for AUC and ROC curve
-    if hasattr(model, 'predict_proba'):
-        y_prob = model.predict_proba(X_test)[:, 1]
-    else:
-        y_prob = model.decision_function(X_test)
+    y_prob = model.predict_proba(X_test)[:, 1]
     
     # Calculate accuracy, precision, recall, F1 score, and AUC
     accuracy = accuracy_score(y_test, y_pred)
@@ -72,21 +68,65 @@ def evaluate_model(model, X_train, y_train, X_test, y_test):
     
     return accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr
 
-# Initialize models
-models = {
-    'Logistic Regression': BaggingClassifier(estimator=LogisticRegression(random_state=42), n_estimators=10, random_state=42),
-    'Decision Tree': BaggingClassifier(estimator=DecisionTreeClassifier(random_state=42), n_estimators=10, random_state=42),
-    'SVM': BaggingClassifier(estimator=SVC(probability=True, random_state=42), n_estimators=10, random_state=42),
-    'K-Nearest Neighbors': BaggingClassifier(estimator=KNeighborsClassifier(), n_estimators=10, random_state=42),
-    'Bagged ANN': BaggingClassifier(estimator=MLPClassifier(hidden_layer_sizes=(100, 50), activation='relu', solver='adam', random_state=42, max_iter=1000), n_estimators=10, random_state=42)
+# Model definitions with hyperparameters for RandomizedSearchCV
+model_definitions = {
+    'Logistic Regression': {
+        'model': BaggingClassifier(estimator=LogisticRegression(random_state=42), n_estimators=10, random_state=42),
+        'params': {
+            'estimator__C': [0.01, 0.1, 1, 10, 100]
+        }
+    },
+    'Decision Tree': {
+        'model': BaggingClassifier(estimator=DecisionTreeClassifier(random_state=42), n_estimators=10, random_state=42),
+        'params': {
+            'estimator__max_depth': [3, 5, 10, None],
+            'estimator__min_samples_split': [2, 5, 10]
+        }
+    },
+    'SVM': {
+        'model': BaggingClassifier(estimator=SVC(probability=True, random_state=42), n_estimators=10, random_state=42),
+        'params': {
+            'estimator__C': [0.1, 1, 10],
+            'estimator__kernel': ['linear', 'rbf']
+        }
+    },
+    'K-Nearest Neighbors': {
+        'model': BaggingClassifier(estimator=KNeighborsClassifier(), n_estimators=10, random_state=42),
+        'params': {
+            'estimator__n_neighbors': [3, 5, 7, 9],
+            'estimator__weights': ['uniform', 'distance']
+        }
+    },
+    'Artificial Neural Network (ANN)': {
+        'model': BaggingClassifier(estimator=MLPClassifier(random_state=42, max_iter=1000), n_estimators=10, random_state=42),
+        'params': {
+            'estimator__hidden_layer_sizes': [(50,), (100,), (100, 50)],
+            'estimator__activation': ['relu', 'tanh'],
+            'estimator__solver': ['adam', 'sgd']
+        }
+    }
 }
 
 # Dictionary to store results
 results = {}
 
-# Evaluate all models
-for model_name, model in models.items():
-    accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr = evaluate_model(model, X_train_cleaned, y_train_cleaned, X_test_cleaned, y_test_cleaned)
+# Evaluate all models with RandomizedSearchCV
+for model_name, model_info in model_definitions.items():
+    model = model_info['model']
+    params = model_info['params']
+    
+    # Initialize RandomizedSearchCV
+    random_search = RandomizedSearchCV(model, params, n_iter=10, scoring='accuracy', random_state=42, n_jobs=-1)
+    
+    # Fit the model
+    random_search.fit(X_train_cleaned, y_train_cleaned)
+    
+    # Print best parameters
+    print(f"{model_name} Best Parameters: {random_search.best_params_}")
+    
+    # Evaluate the model
+    accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr = evaluate_model(random_search, X_train_cleaned, y_train_cleaned, X_test_cleaned, y_test_cleaned)
+    
     results[model_name] = {
         'accuracy': accuracy,
         'precision': precision,
@@ -97,7 +137,7 @@ for model_name, model in models.items():
         'fpr': fpr,
         'tpr': tpr
     }
-    print(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC Score: {auc_score:.4f}")
+    print(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC: {auc_score:.4f}")
 
 # Plot confusion matrices
 for model_name, result in results.items():
@@ -129,7 +169,8 @@ for model_name, result in results.items():
         'Precision': f"{result['precision']:.4f}",
         'Recall': f"{result['recall']:.4f}",
         'F1 Score': f"{result['f1_score']:.4f}",
-        'AUC Score': f"{result['auc_score']:.4f}"
+        'AUC Score': f"{result['auc_score']:.4f}",
+        'Best Parameters': str(random_search.best_params_)
     })
 
 # Convert the list of dictionaries into a pandas DataFrame

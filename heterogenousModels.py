@@ -6,8 +6,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import StackingClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import BaggingClassifier
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -35,8 +35,8 @@ data_cleaned = data_cleaned.drop(columns=['num'])
 X_cleaned = data_cleaned.drop(columns=['heart_disease'])
 y_cleaned = data_cleaned['heart_disease']
 
-# Split the cleaned data into training and testing sets (80% train, 20% test)
-X_train_cleaned, X_test_cleaned, y_train_cleaned, y_test_cleaned = train_test_split(X_cleaned, y_cleaned, test_size=0.2, random_state=42)
+# Split the cleaned data into training and testing sets (90% train, 10% test)
+X_train_cleaned, X_test_cleaned, y_train_cleaned, y_test_cleaned = train_test_split(X_cleaned, y_cleaned, test_size=0.1, random_state=42)
 
 # Normalize the feature data
 scaler = StandardScaler()
@@ -72,22 +72,28 @@ def evaluate_model(model, X_train, y_train, X_test, y_test):
     
     return accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr
 
-# Initialize models
-models = {
-    'Logistic Regression': BaggingClassifier(estimator=LogisticRegression(random_state=42), n_estimators=10, random_state=42),
-    'Decision Tree': BaggingClassifier(estimator=DecisionTreeClassifier(random_state=42), n_estimators=10, random_state=42),
-    'SVM': BaggingClassifier(estimator=SVC(probability=True, random_state=42), n_estimators=10, random_state=42),
-    'K-Nearest Neighbors': BaggingClassifier(estimator=KNeighborsClassifier(), n_estimators=10, random_state=42),
-    'Bagged ANN': BaggingClassifier(estimator=MLPClassifier(hidden_layer_sizes=(100, 50), activation='relu', solver='adam', random_state=42, max_iter=1000), n_estimators=10, random_state=42)
-}
+# Initialize base models, including ANN
+base_models = [
+    ('logistic', LogisticRegression(random_state=42)),
+    ('decision_tree', DecisionTreeClassifier(random_state=42)),
+    ('svm', SVC(probability=True, random_state=42)),
+    ('knn', KNeighborsClassifier()),
+    ('ann', MLPClassifier(hidden_layer_sizes=(50,), activation='relu', solver='adam', random_state=42, max_iter=1000))  # ANN as base model
+]
 
-# Dictionary to store results
-results = {}
+# Initialize the stacking classifier with MLP as the meta-model
+stacking_model = StackingClassifier(
+    estimators=base_models,
+    final_estimator=MLPClassifier(hidden_layer_sizes=(100,), activation='relu', solver='adam', random_state=42, max_iter=1000),
+    cv=5
+)
 
-# Evaluate all models
-for model_name, model in models.items():
-    accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr = evaluate_model(model, X_train_cleaned, y_train_cleaned, X_test_cleaned, y_test_cleaned)
-    results[model_name] = {
+# Evaluate the stacking model
+accuracy, precision, recall, f1, auc_score, conf_matrix, fpr, tpr = evaluate_model(stacking_model, X_train_cleaned, y_train_cleaned, X_test_cleaned, y_test_cleaned)
+
+# Store the results in a dictionary
+results = {
+    'Stacking Model': {
         'accuracy': accuracy,
         'precision': precision,
         'recall': recall,
@@ -97,43 +103,41 @@ for model_name, model in models.items():
         'fpr': fpr,
         'tpr': tpr
     }
-    print(f"{model_name} - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC Score: {auc_score:.4f}")
+}
 
-# Plot confusion matrices
-for model_name, result in results.items():
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(result['conf_matrix'], annot=True, fmt='d', cmap='Blues', xticklabels=['No Heart Disease', 'Heart Disease'], yticklabels=['No Heart Disease', 'Heart Disease'])
-    plt.title(f'{model_name} - Confusion Matrix')
-    plt.xlabel('Predicted')
-    plt.ylabel('Actual')
-    plt.show()
+# Print results
+print(f"Stacking Model - Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}, AUC Score: {auc_score:.4f}")
 
-# Plot combined ROC curve
+# Plot confusion matrix for the stacking model
+plt.figure(figsize=(8, 6))
+sns.heatmap(results['Stacking Model']['conf_matrix'], annot=True, fmt='d', cmap='Blues', xticklabels=['No Heart Disease', 'Heart Disease'], yticklabels=['No Heart Disease', 'Heart Disease'])
+plt.title('Stacking Model - Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.show()
+
+# Plot ROC curve for the stacking model
 plt.figure(figsize=(10, 8))
-for model_name, result in results.items():
-    plt.plot(result['fpr'], result['tpr'], label=f"{model_name} (AUC = {result['auc_score']:.2f})")
-
+plt.plot(results['Stacking Model']['fpr'], results['Stacking Model']['tpr'], label=f"Stacking Model (AUC = {results['Stacking Model']['auc_score']:.2f})")
 plt.plot([0, 1], [0, 1], color='navy', linestyle='--')  # Diagonal line representing random guessing
 plt.xlabel('False Positive Rate')
 plt.ylabel('True Positive Rate')
-plt.title('Combined ROC Curve')
+plt.title('Stacking Model ROC Curve')
 plt.legend(loc='lower right')
 plt.show()
 
-# Collect the results in a list of dictionaries
-model_results = []
-for model_name, result in results.items():
-    model_results.append({
-        'Model': model_name,
-        'Accuracy': f"{result['accuracy']:.4f}",
-        'Precision': f"{result['precision']:.4f}",
-        'Recall': f"{result['recall']:.4f}",
-        'F1 Score': f"{result['f1_score']:.4f}",
-        'AUC Score': f"{result['auc_score']:.4f}"
-    })
+# Collect the results in a DataFrame
+model_results = [{
+    'Model': 'Stacking Model',
+    'Accuracy': f"{accuracy:.4f}",
+    'Precision': f"{precision:.4f}",
+    'Recall': f"{recall:.4f}",
+    'F1 Score': f"{f1:.4f}",
+    'AUC Score': f"{auc_score:.4f}"
+}]
 
-# Convert the list of dictionaries into a pandas DataFrame
+# Convert the list into a pandas DataFrame
 results_df = pd.DataFrame(model_results)
 
-# Print the table in a format that you can copy-paste
+# Print the results DataFrame
 print(results_df.to_string(index=False))
