@@ -1,1 +1,2 @@
 # Topics
+Conducted a comparative analysis of homogeneous and heterogeneous ensemble methods for predicting CVD using clinical and demographic data. Compared base models (LR, DT, SVM, KNN, ANN) with ensemble methods (Bagging, Boosting, and Stacking), where ensemble models showed superior performance. Additionally, conducted cross-validation on an Indian dataset, revealing performance variations due to differences in data distribution. Highlighted the importance of robust validation techniques and the challenges of model generalization across diverse populations
